@@ -4,6 +4,8 @@ import ContractorStatsChart from "@/components/charts/ContractorStatsChart";
 import ContractorKpisChart from "@/components/charts/ContractorKpisChart";
 import RequesterBarChart from "@/components/charts/RequesterBarChart";
 import RequesterLineChart from "@/components/charts/RequesterLineChart";
+import AdminBarChart from "@/components/charts/AdminBarChart";
+import AdminLineChart from "@/components/charts/AdminLineChart";
 import {
   FileText,
   CheckCircle2,
@@ -11,6 +13,15 @@ import {
   Undo2,
   PauseCircle,
   XCircle,
+  Users,
+  TrendingUp,
+  AlertTriangle,
+  Shield,
+  UserPlus,
+  Settings,
+  Activity,
+  Key,
+  FileX,
 } from "lucide-react";
 
 export default function Index() {
@@ -22,6 +33,15 @@ export default function Index() {
       returned: 3,
       hold: 5,
       rejected: 2,
+      totalPermits: 77, // Sum of all permits
+      // Administrator specific counters
+      totalUsers: 156,
+      newUsers: 8,
+      activeRoles: 12,
+      securityAlerts: 3,
+      currentlyOnline: 23,
+      pendingActions: 15,
+      permissionIssues: 2,
     }),
     [],
   );
@@ -29,55 +49,260 @@ export default function Index() {
   // Get user role - replace this with your actual authentication logic
   const userRole = getCurrentUserRole(); // This should come from your auth context/store
   const isRequester = userRole === "requester";
+  const isApprover = userRole === "approver";
+  const isSafetyOfficer = userRole === "safety";
+  const isAdministrator = userRole === "admin";
+
+  // Define status cards based on role
+  const statusCards = useMemo(() => {
+    if (isRequester) {
+      // Requester: Total permits, approved permits, rejected permits, permits under hold
+      return [
+        {
+          title: "Total Permits",
+          count: counters.totalPermits,
+          Icon: FileText,
+          accentClass: "from-blue-600/40 to-transparent",
+          to: "/all-permits",
+        },
+        {
+          title: "Approved Permits",
+          count: counters.approved,
+          Icon: CheckCircle2,
+          accentClass: "from-[#4caf50]/40 to-transparent",
+          to: "/approved-permits",
+        },
+        {
+          title: "Rejected Permits",
+          count: counters.rejected,
+          Icon: XCircle,
+          accentClass: "from-[#f44336]/40 to-transparent",
+          to: "/rejected-permits",
+        },
+        {
+          title: "Permits Under Hold",
+          count: counters.hold,
+          Icon: PauseCircle,
+          accentClass: "from-purple-500/40 to-transparent",
+          to: "/permits-on-hold",
+        },
+      ];
+    } else if (isApprover) {
+      // Approver: New permits, approved permits, pending approval permits, returned permits, permits under hold, permits rejected
+      return [
+        {
+          title: "New Permits",
+          count: counters.new,
+          Icon: FileText,
+          accentClass: "from-blue-500/40 to-transparent",
+          to: "/new-permits",
+        },
+        {
+          title: "Approved Permits",
+          count: counters.approved,
+          Icon: CheckCircle2,
+          accentClass: "from-[#4caf50]/40 to-transparent",
+          to: "/approved-permits",
+        },
+        {
+          title: "Pending Approval",
+          count: counters.pending,
+          Icon: Clock4,
+          accentClass: "from-[#ff9800]/40 to-transparent",
+          to: "/pending-approval",
+        },
+        {
+          title: "Returned Permits",
+          count: counters.returned,
+          Icon: Undo2,
+          accentClass: "from-yellow-400/40 to-transparent",
+          to: "/returned-permits",
+        },
+        {
+          title: "Permits Under Hold",
+          count: counters.hold,
+          Icon: PauseCircle,
+          accentClass: "from-purple-500/40 to-transparent",
+          to: "/permits-on-hold",
+        },
+        {
+          title: "Rejected Permits",
+          count: counters.rejected,
+          Icon: XCircle,
+          accentClass: "from-[#f44336]/40 to-transparent",
+          to: "/rejected-permits",
+        },
+      ];
+    } else if (isSafetyOfficer) {
+      // Safety Officer: New permits, approved permits, pending approval permits, returned permits, permits under hold, permits rejected
+      return [
+        {
+          title: "New Permits",
+          count: counters.new,
+          Icon: FileText,
+          accentClass: "from-blue-500/40 to-transparent",
+          to: "/new-permits",
+        },
+        {
+          title: "Approved Permits",
+          count: counters.approved,
+          Icon: CheckCircle2,
+          accentClass: "from-[#4caf50]/40 to-transparent",
+          to: "/approved-permits",
+        },
+        {
+          title: "Pending Approval",
+          count: counters.pending,
+          Icon: Clock4,
+          accentClass: "from-[#ff9800]/40 to-transparent",
+          to: "/pending-approval",
+        },
+        {
+          title: "Returned Permits",
+          count: counters.returned,
+          Icon: Undo2,
+          accentClass: "from-yellow-400/40 to-transparent",
+          to: "/returned-permits",
+        },
+        {
+          title: "Permits Under Hold",
+          count: counters.hold,
+          Icon: PauseCircle,
+          accentClass: "from-purple-500/40 to-transparent",
+          to: "/permits-on-hold",
+        },
+        {
+          title: "Rejected Permits",
+          count: counters.rejected,
+          Icon: XCircle,
+          accentClass: "from-[#f44336]/40 to-transparent",
+          to: "/rejected-permits",
+        },
+      ];
+    } else if (isAdministrator) {
+      // Administrator: total users, new users, active roles, security alerts, currently online, pending actions, permissions issues
+      return [
+        {
+          title: "Total Users",
+          count: counters.totalUsers,
+          Icon: Users,
+          accentClass: "from-indigo-500/40 to-transparent",
+          to: "/users",
+        },
+        {
+          title: "New Users",
+          count: counters.newUsers,
+          Icon: UserPlus,
+          accentClass: "from-green-500/40 to-transparent",
+          to: "/new-users",
+        },
+        {
+          title: "Active Roles",
+          count: counters.activeRoles,
+          Icon: Settings,
+          accentClass: "from-blue-500/40 to-transparent",
+          to: "/roles",
+        },
+        {
+          title: "Security Alerts",
+          count: counters.securityAlerts,
+          Icon: Shield,
+          accentClass: "from-red-500/40 to-transparent",
+          to: "/security-alerts",
+        },
+        {
+          title: "Currently Online",
+          count: counters.currentlyOnline,
+          Icon: Activity,
+          accentClass: "from-green-400/40 to-transparent",
+          to: "/online-users",
+        },
+        {
+          title: "Pending Actions",
+          count: counters.pendingActions,
+          Icon: Clock4,
+          accentClass: "from-orange-500/40 to-transparent",
+          to: "/pending-actions",
+        },
+        {
+          title: "Permission Issues",
+          count: counters.permissionIssues,
+          Icon: Key,
+          accentClass: "from-yellow-600/40 to-transparent",
+          to: "/permission-issues",
+        },
+      ];
+    } else {
+      // Default/Contractor - original status cards
+      return [
+        {
+          title: "New Permits",
+          count: counters.new,
+          Icon: FileText,
+          accentClass: "from-[#f44336]/40 to-transparent",
+          to: "/permit-details",
+        },
+        {
+          title: "Approved Permits",
+          count: counters.approved,
+          Icon: CheckCircle2,
+          accentClass: "from-[#4caf50]/40 to-transparent",
+          to: "/overall-status",
+        },
+        {
+          title: "Pending Approval Permits",
+          count: counters.pending,
+          Icon: Clock4,
+          accentClass: "from-[#ff9800]/40 to-transparent",
+          to: "/overall-status",
+        },
+        {
+          title: "Returned Permits",
+          count: counters.returned,
+          Icon: Undo2,
+          accentClass: "from-yellow-400/40 to-transparent",
+          to: "/permit-details",
+        },
+        {
+          title: "Permits under Hold",
+          count: counters.hold,
+          Icon: PauseCircle,
+          accentClass: "from-purple-500/40 to-transparent",
+          to: "/overall-status",
+        },
+        {
+          title: "Permits Rejected",
+          count: counters.rejected,
+          Icon: XCircle,
+          accentClass: "from-[#f44336]/40 to-transparent",
+          to: "/overall-status",
+        },
+      ];
+    }
+  }, [counters, isRequester, isApprover, isSafetyOfficer, isAdministrator]);
 
   return (
     <div className="space-y-6">
       <section
         aria-label="Status cards"
-        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4"
+        className={`grid gap-4 ${
+          isAdministrator 
+            ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7" 
+            : isRequester 
+            ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-4" 
+            : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6"
+        }`}
       >
-        <StatusCard
-          title="New Permits"
-          count={counters.new}
-          Icon={FileText}
-          accentClass="from-[#f44336]/40 to-transparent"
-          to="/permit-details"
-        />
-        <StatusCard
-          title="Approved Permits"
-          count={counters.approved}
-          Icon={CheckCircle2}
-          accentClass="from-[#4caf50]/40 to-transparent"
-          to="/overall-status"
-        />
-        <StatusCard
-          title="Pending Approval Permits"
-          count={counters.pending}
-          Icon={Clock4}
-          accentClass="from-[#ff9800]/40 to-transparent"
-          to="/overall-status"
-        />
-        <StatusCard
-          title="Returned Permits"
-          count={counters.returned}
-          Icon={Undo2}
-          accentClass="from-yellow-400/40 to-transparent"
-          to="/permit-details"
-        />
-        <StatusCard
-          title="Permits under Hold"
-          count={counters.hold}
-          Icon={PauseCircle}
-          accentClass="from-purple-500/40 to-transparent"
-          to="/overall-status"
-        />
-        <StatusCard
-          title="Permits Rejected"
-          count={counters.rejected}
-          Icon={XCircle}
-          accentClass="from-[#f44336]/40 to-transparent"
-          to="/overall-status"
-        />
+        {statusCards.map((card, index) => (
+          <StatusCard
+            key={index}
+            title={card.title}
+            count={card.count}
+            Icon={card.Icon}
+            accentClass={card.accentClass}
+            to={card.to}
+          />
+        ))}
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -89,6 +314,16 @@ export default function Index() {
             </div>
             <div>
               <RequesterLineChart />
+            </div>
+          </>
+        ) : isAdministrator ? (
+          // Administrator view - components handle their own styling
+          <>
+            <div className="lg:col-span-2">
+              <AdminBarChart />
+            </div>
+            <div>
+              <AdminLineChart />
             </div>
           </>
         ) : (
