@@ -88,6 +88,12 @@ type PermitForm = {
   approverCustomComments?: any[];
   // Additional UI fields
   plannedWorkPrefix?: string;
+  // Requester comments intended for Safety Officer
+  requesterSafetyRequireUrgent?: boolean;
+  requesterSafetySafetyManagerApproval?: boolean;
+  requesterSafetyPlannedShutdown?: boolean;
+  requesterSafetyPlannedShutdownDate?: string;
+  requesterSafetyCustomComments?: any[];
 };
 
 const DEFAULT_FORM = (): PermitForm => ({
@@ -202,6 +208,12 @@ const DEFAULT_FORM = (): PermitForm => ({
   },
   requesterCustomComments: [],
   approverCustomComments: [],
+  // Safety-specific requester comments defaults
+  requesterSafetyRequireUrgent: false,
+  requesterSafetySafetyManagerApproval: false,
+  requesterSafetyPlannedShutdown: false,
+  requesterSafetyPlannedShutdownDate: "",
+  requesterSafetyCustomComments: [],
 });
 
 // Button component
@@ -490,6 +502,7 @@ export default function CreatePermit() {
   const navigate = useNavigate();
   const [form, setForm] = useState<PermitForm>(() => DEFAULT_FORM());
   const [newRequesterComment, setNewRequesterComment] = useState("");
+  const [newRequesterSafetyComment, setNewRequesterSafetyComment] = useState("");
   const [newApproverComment, setNewApproverComment] = useState("");
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
@@ -955,9 +968,11 @@ export default function CreatePermit() {
                 )}
               </ul>
             </div>
-            <div>
-              <strong>Progress:</strong> {completion}%
-            </div>
+            {!isApprover && (
+              <div>
+                <strong>Progress:</strong> {completion}%
+              </div>
+            )}
           </div>
         );
       default:
@@ -969,7 +984,13 @@ export default function CreatePermit() {
     setForm((s) => ({ ...s, ...patch }));
 
   const [currentStep, setCurrentStep] = useState(0);
-  const steps = [
+  // Determine role to alter steps for approvers and safety officers
+  const role =
+    typeof window !== "undefined" ? localStorage.getItem("dps_role") : null;
+  const isApprover = role === "approver";
+  const isApproverOrSafety = isApprover || role === "safety";
+
+  const defaultSteps = [
     {
       title: "Basic Details",
       description: "Permit information and work description",
@@ -1003,7 +1024,19 @@ export default function CreatePermit() {
       description: "Final review and submission",
     },
   ];
+  // For approver or safety role: collapse to only the final section, renamed as Section 1
+  const steps = isApproverOrSafety
+    ? [
+        {
+          title: "Section 1: Permit Details",
+          description: "Final review and submission",
+        },
+      ]
+    : defaultSteps;
   const safetyRef = useRef<HTMLDivElement | null>(null);
+
+  // Map UI step to the original content index
+  const effectiveStep = isApproverOrSafety ? 7 : currentStep;
 
   const completion = useMemo(() => {
     let completed = 0;
@@ -1115,6 +1148,18 @@ export default function CreatePermit() {
     return;
   }, [showPreviewModal]);
 
+  // Auto-open preview modal if URL contains ?preview
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.has("preview")) {
+        setShowPreviewModal(true);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
   const submit = () => {
     try {
       const payload = { ...form, submittedAt: new Date().toISOString() };
@@ -1127,6 +1172,60 @@ export default function CreatePermit() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const descRef = useRef<HTMLDivElement | null>(null);
+
+  // Persist requester comments & selections for approver view
+  useEffect(() => {
+    try {
+      const payload = {
+        requesterRequireUrgent: !!form.requesterRequireUrgent,
+        requesterSafetyManagerApproval: !!form.requesterSafetyManagerApproval,
+        requesterPlannedShutdown: !!form.requesterPlannedShutdown,
+        requesterPlannedShutdownDate: form.requesterPlannedShutdownDate || "",
+        requesterCustomComments: form.requesterCustomComments || [],
+        // Include Safety-specific requester comments so SafetyOfficer can read them
+        requesterSafetyRequireUrgent: !!(form as any).requesterSafetyRequireUrgent,
+        requesterSafetySafetyManagerApproval: !!(form as any).requesterSafetySafetyManagerApproval,
+        requesterSafetyPlannedShutdown: !!(form as any).requesterSafetyPlannedShutdown,
+        requesterSafetyPlannedShutdownDate: (form as any).requesterSafetyPlannedShutdownDate || "",
+        requesterSafetyCustomComments: (form as any).requesterSafetyCustomComments || [],
+      };
+      localStorage.setItem("dps_requester_comments", JSON.stringify(payload));
+    } catch (e) {
+      // ignore storage issues
+    }
+  }, [
+    form.requesterRequireUrgent,
+    form.requesterSafetyManagerApproval,
+    form.requesterPlannedShutdown,
+    form.requesterPlannedShutdownDate,
+    form.requesterCustomComments,
+    (form as any).requesterSafetyRequireUrgent,
+    (form as any).requesterSafetySafetyManagerApproval,
+    (form as any).requesterSafetyPlannedShutdown,
+    (form as any).requesterSafetyPlannedShutdownDate,
+    (form as any).requesterSafetyCustomComments,
+  ]);
+
+  // Load approver comments once so they appear under 'Comments from Approver'
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      const raw = localStorage.getItem("dps_approver_comments");
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      update({
+        approverRequireUrgent: !!data.approverRequireUrgent,
+        approverSafetyManagerApproval: !!data.approverSafetyManagerApproval,
+        approverPlannedShutdown: !!data.approverPlannedShutdown,
+        approverPlannedShutdownDate: data.approverPlannedShutdownDate || "",
+        approverCustomComments: data.approverCustomComments || [],
+      } as any);
+    } catch (e) {
+      // ignore
+    }
+    // run only once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (
@@ -1392,10 +1491,48 @@ export default function CreatePermit() {
         steps={steps}
         currentStep={currentStep}
         onStepChange={setCurrentStep}
-        showProgress={true}
+        showProgress={!isApprover}
         allowClickNavigation={true}
         variant="numbered"
       />
+
+      {/* Company header, matching HT header style (moved below progress) */}
+      <div className="bg-white mt-3">
+        <div className="mx-auto max-w-7xl px-4 py-4 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <img src="/placeholder.svg" alt="AM/NS INDIA logo" className="h-[60px] w-auto" />
+          </div>
+          <div className="text-center">
+            <div className="font-bold text-gray-900">ArcelorMittal Nippon Steel India Limited</div>
+            <div className="text-gray-600">HAZIRA</div>
+            <div className="mt-1 text-[20px] font-bold text-gray-900">
+              {form.permitDocType === "highTension"
+                ? "ADDITIONAL WORK PERMIT FOR HIGH TENSION LINE/Equipment"
+                : form.permitDocType === "gasLine"
+                ? "ADDITIONAL WORK PERMIT FOR GAS LINE"
+                : "PERMIT TO WORK"}
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 w-[240px]">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Certificate No.</label>
+              <input
+                value={form.certificateNumber || ""}
+                onChange={(e) => update({ certificateNumber: e.target.value })}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-2 focus:border-blue-600 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Permit No.</label>
+              <input
+                value={form.permitNumber || ""}
+                onChange={(e) => update({ permitNumber: e.target.value })}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-2 focus:border-blue-600 focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {showPreviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -1622,7 +1759,9 @@ export default function CreatePermit() {
                         </tr>
                         <tr className="odd:bg-white even:bg-gray-50">
                           <td className="px-2 py-2 border">HYDROGEN</td>
-                          <td className="px-2 py-2 border text-center">-</td>
+                          <td className="px-2 py-2 border text-center">
+                            12.5% / 74.2%
+                          </td>
                           <td className="px-2 py-2 border text-center">
                             4.0% / 75%
                           </td>
@@ -1763,7 +1902,7 @@ export default function CreatePermit() {
       <div className="rounded-xl border bg-white p-4 shadow-sm mt-6">
         {/* Step Content */}
         <div>
-          {currentStep === 0 && (
+          {effectiveStep === 0 && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-4 pb-14">
                 <div className="border rounded-lg p-4 bg-white">
@@ -2130,7 +2269,7 @@ export default function CreatePermit() {
             </div>
           )}
 
-          {currentStep === 1 && (
+          {effectiveStep === 1 && (
             <div className="space-y-4" ref={safetyRef}>
               <div className="bg-white rounded-xl shadow-lg p-4 relative">
                 <div className="bg-gradient-to-r from-slate-50 to-slate-100 -mx-4 mt-0 mb-4 p-3 rounded-t-md flex items-center justify-between">
@@ -2315,7 +2454,7 @@ export default function CreatePermit() {
             </div>
           )}
 
-          {currentStep === 2 && (
+          {effectiveStep === 2 && (
             <div className="space-y-4">
               <div className="bg-white rounded-2xl shadow-xl p-4 relative">
                 <div className="w-full text-center text-white font-semibold text-lg rounded-t-2xl bg-gradient-to-r from-blue-900 to-blue-700 py-4">
@@ -2425,7 +2564,7 @@ export default function CreatePermit() {
                                 false
                               }
                               onChange={() => togglePPE(r.key)}
-                              className="w-5 h-5 border-2 border-slate-300 rounded transition-all duration-200 checked:bg-blue-600 checked:border-blue-600 hover:border-blue-400 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                              className="w-5 h-5 border-2 border-slate-300 rounded-md transition-all duration-200 checked:bg-blue-600 checked:border-blue-600 hover:border-blue-400 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30"
                             />
                             <label
                               htmlFor={`ppe-${r.key}`}
@@ -2464,7 +2603,7 @@ export default function CreatePermit() {
                                 false
                               }
                               onChange={() => toggleFire(r.rightKey)}
-                              className="w-5 h-5 border-2 border-slate-300 rounded transition-all duration-200 checked:bg-blue-600 checked:border-blue-600 hover:border-blue-400 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                              className="w-5 h-5 border-2 border-slate-300 rounded-md transition-all duration-200 checked:bg-blue-600 checked:border-blue-600 hover:border-blue-400 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30"
                             />
                             <label
                               htmlFor={`fire-${r.rightKey}`}
@@ -2594,7 +2733,7 @@ export default function CreatePermit() {
             </div>
           )}
 
-          {currentStep === 3 && (
+          {effectiveStep === 3 && (
             <div className="space-y-4">
               <div className="bg-white rounded-xl shadow-lg p-6 relative">
                 <div className="w-full text-left text-slate-800 font-bold text-lg rounded-t-md bg-gradient-to-r from-slate-100 to-slate-200 py-4 px-4">
@@ -2698,7 +2837,7 @@ export default function CreatePermit() {
             </div>
           )}
 
-          {currentStep === 4 && (
+          {effectiveStep === 4 && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white rounded-xl shadow-md border border-slate-200 p-6">
@@ -3005,7 +3144,7 @@ export default function CreatePermit() {
             </div>
           )}
 
-          {currentStep === 5 && (
+          {effectiveStep === 5 && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
@@ -3594,7 +3733,7 @@ export default function CreatePermit() {
             </div>
           )}
 
-          {currentStep === 6 && (
+          {effectiveStep === 6 && (
             <div className="space-y-6">
               <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 mx-auto max-w-3xl">
                 <div className="text-center bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold py-3 rounded-md shadow-sm">
@@ -3774,7 +3913,7 @@ export default function CreatePermit() {
             </div>
           )}
 
-          {currentStep === 7 && (
+          {effectiveStep === 7 && (
             <div className="space-y-6">
               <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
                 <div className="text-center bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold py-3 rounded-md">
@@ -3837,19 +3976,19 @@ export default function CreatePermit() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="p-2 rounded-md border">
-                      <div className="text-xs text-gray-500">
+                    <div>
+                      <label className="text-xs text-gray-500">
                         Permit Issue Date
-                      </div>
+                      </label>
                       <input
                         type="date"
                         className="w-full mt-1 rounded border px-3 py-2 text-sm"
                       />
                     </div>
-                    <div className="p-2 rounded-md border">
-                      <div className="text-xs text-gray-500">
+                    <div>
+                      <label className="text-xs text-gray-500">
                         Expected Return Date
-                      </div>
+                      </label>
                       <input
                         type="date"
                         className="w-full mt-1 rounded border px-3 py-2 text-sm"
@@ -3857,31 +3996,123 @@ export default function CreatePermit() {
                     </div>
                   </div>
 
-                  <div className="mt-3">
-                    <div className="text-sm font-medium">Progress</div>
-                    <div className="w-full bg-gray-200 h-3 rounded mt-2">
-                      <div
-                        className="h-3 rounded bg-green-500"
-                        style={{ width: `${completion}%` }}
-                      />
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {completion}% complete
-                    </div>
-                  </div>
+                  {(() => {
+                    try {
+                      const raw =
+                        typeof window !== "undefined"
+                          ? localStorage.getItem("dps_approver_comments")
+                          : null;
+                      const data = raw ? JSON.parse(raw) : null;
+                      const hasAny = !!(
+                        data && (
+                          data.approverRequireUrgent ||
+                          data.approverSafetyManagerApproval ||
+                          data.approverPlannedShutdown ||
+                          (data.approverCustomComments || []).length > 0
+                        )
+                      );
+                      return (
+                        <>
+                          <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                            <div className="text-md font-medium">Comments from Approver:</div>
+                            <div className="mt-2 space-y-1 text-sm">
+                              {hasAny ? (
+                                <>
+                                  {data?.approverRequireUrgent && (
+                                    <div>Complete your work in timely manner</div>
+                                  )}
+                                  {data?.approverSafetyManagerApproval && (
+                                    <div>Involve safety person while working</div>
+                                  )}
+                                  {(data?.approverPlannedShutdown || data?.approverPlannedShutdownDate) && (
+                                    <div>
+                                      Ensure shutdown on this date is confirmed before start of work: {data?.approverPlannedShutdownDate || ""}
+                                    </div>
+                                  )}
+                                  {(data?.approverCustomComments || []).map((it: any, i: number) => (
+                                    <div key={i}>- {typeof it === "string" ? it : it.text}</div>
+                                  ))}
+                                </>
+                              ) : (
+                                <div className="text-gray-500">No comments from approver yet</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* New: Comments from Safety Officer (read-only) */}
+                          {(() => {
+                            try {
+                              const raw =
+                                typeof window !== "undefined"
+                                  ? localStorage.getItem("dps_SafetyOfficer_comments")
+                                  : null;
+                              const sData = raw ? JSON.parse(raw) : null;
+                              const sHasAny = !!(
+                                sData && (
+                                  sData.SafetyOfficerRequireUrgent ||
+                                  sData.SafetyOfficerSafetyManagerApproval ||
+                                  sData.SafetyOfficerPlannedShutdown ||
+                                  (sData.SafetyOfficerCustomComments || []).length > 0
+                                )
+                              );
+                              return (
+                                <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                                  <div className="text-md font-medium">Comments from Safety Officer:</div>
+                                  <div className="mt-2 space-y-1 text-sm">
+                                    {sHasAny ? (
+                                      <>
+                                        {sData?.SafetyOfficerRequireUrgent && (
+                                          <div>Complete your work in timely manner</div>
+                                        )}
+                                        {sData?.SafetyOfficerSafetyManagerApproval && (
+                                          <div>Involve safety person while working</div>
+                                        )}
+                                        {(sData?.SafetyOfficerPlannedShutdown || sData?.SafetyOfficerPlannedShutdownDate) && (
+                                          <div>
+                                            Ensure shutdown on this date is confirmed before start of work: {sData?.SafetyOfficerPlannedShutdownDate || ""}
+                                          </div>
+                                        )}
+                                        {(sData?.SafetyOfficerCustomComments || []).map((it: any, i: number) => (
+                                          <div key={i}>- {typeof it === "string" ? it : it.text}</div>
+                                        ))}
+                                      </>
+                                    ) : (
+                                      <div className="text-gray-500">No comments from safety officer yet</div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            } catch (e) {
+                              return (
+                                <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                                  <div className="text-md font-medium">Comments from Safety Officer:</div>
+                                  <div className="mt-2 space-y-1 text-sm text-gray-500">No comments from safety officer yet</div>
+                                </div>
+                              );
+                            }
+                          })()}
+                        </>
+                      );
+                    } catch (e) {
+                      return (
+                        <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                          <div className="text-md font-medium">Comments from Approver:</div>
+                          <div className="mt-2 space-y-1 text-sm text-gray-500">No comments from approver yet</div>
+                        </div>
+                      );
+                    }
+                  })()}
 
                   <div className="mt-4 bg-yellow-50 p-3 rounded-md">
-                    <div className="text-sm font-medium">
-                      Comments from requester:
+                    <div className="text-md font-medium">
+                      Comments for Approver:
                     </div>
                     <label className="flex items-center gap-2 mt-2">
                       <input
                         type="checkbox"
-                        checked={(form as any).requesterRequireUrgent || false}
+                        checked={!!form.requesterRequireUrgent}
                         onChange={(e) =>
-                          update({
-                            requesterRequireUrgent: e.target.checked,
-                          } as any)
+                          update({ requesterRequireUrgent: e.target.checked })
                         }
                       />
                       Require on urgent basis
@@ -3889,40 +4120,36 @@ export default function CreatePermit() {
                     <label className="flex items-center gap-2 mt-2">
                       <input
                         type="checkbox"
-                        checked={
-                          (form as any).requesterSafetyManagerApproval || false
-                        }
+                        checked={!!form.requesterSafetyManagerApproval}
                         onChange={(e) =>
                           update({
                             requesterSafetyManagerApproval: e.target.checked,
-                          } as any)
+                          })
                         }
                       />
                       Safety Manager approval required
                     </label>
-                    <div className="mt-2 text-sm flex items-center gap-2">
+                    <div className="mt-2 text-md flex items-center gap-2">
                       <label className="inline-flex items-center gap-2">
                         <input
                           type="checkbox"
-                          checked={
-                            (form as any).requesterPlannedShutdown || false
-                          }
+                          checked={!!form.requesterPlannedShutdown}
                           onChange={(e) =>
                             update({
                               requesterPlannedShutdown: e.target.checked,
-                            } as any)
+                            })
                           }
                         />
-                        <span>Planned shutdown on</span>
+                        <span>Planned shutdown on:</span>
                       </label>
                       <input
                         type="date"
                         className="rounded border px-2 py-1 text-sm"
-                        value={(form as any).requesterPlannedShutdownDate || ""}
+                        value={form.requesterPlannedShutdownDate || ""}
                         onChange={(e) =>
                           update({
                             requesterPlannedShutdownDate: e.target.value,
-                          } as any)
+                          })
                         }
                       />
                     </div>
@@ -4020,69 +4247,55 @@ export default function CreatePermit() {
                     </div>
                   </div>
 
+                  {/* Comments for Safety Officer (interactive) */}
                   <div className="mt-4 bg-yellow-50 p-3 rounded-md">
-                    <div className="text-sm font-medium">
-                      Specific Comments from Approver:
-                    </div>
+                    <div className="text-md font-medium">Comments for Safety Officer:</div>
                     <label className="flex items-center gap-2 mt-2">
                       <input
                         type="checkbox"
-                        checked={(form as any).approverRequireUrgent || false}
+                        checked={!!(form as any).requesterSafetyRequireUrgent}
                         onChange={(e) =>
-                          update({
-                            approverRequireUrgent: e.target.checked,
-                          } as any)
+                          update({ requesterSafetyRequireUrgent: e.target.checked } as any)
                         }
                       />
-                      Complete your work in timely manner
+                      Require on urgent basis
                     </label>
                     <label className="flex items-center gap-2 mt-2">
                       <input
                         type="checkbox"
-                        checked={
-                          (form as any).approverSafetyManagerApproval || false
-                        }
+                        checked={!!(form as any).requesterSafetySafetyManagerApproval}
                         onChange={(e) =>
-                          update({
-                            approverSafetyManagerApproval: e.target.checked,
-                          } as any)
+                          update({ requesterSafetySafetyManagerApproval: e.target.checked } as any)
                         }
                       />
-                      Involve safety person while working
+                     Approver approval required
                     </label>
-                    <div className="mt-2 text-sm flex items-center gap-2">
+                    <div className="mt-2 text-md flex items-center gap-2">
                       <label className="inline-flex items-center gap-2">
                         <input
                           type="checkbox"
-                          checked={
-                            (form as any).approverPlannedShutdown || false
-                          }
+                          checked={!!(form as any).requesterSafetyPlannedShutdown}
                           onChange={(e) =>
-                            update({
-                              approverPlannedShutdown: e.target.checked,
-                            } as any)
+                            update({ requesterSafetyPlannedShutdown: e.target.checked } as any)
                           }
                         />
                         <span>
-                          Ensure shutdown on this data is confirmed before start
-                          of work
+                        Planned shutdown on:
                         </span>
                       </label>
                       <input
                         type="date"
                         className="rounded border px-2 py-1 text-sm"
-                        value={(form as any).approverPlannedShutdownDate || ""}
+                        value={(form as any).requesterSafetyPlannedShutdownDate || ""}
                         onChange={(e) =>
-                          update({
-                            approverPlannedShutdownDate: e.target.value,
-                          } as any)
+                          update({ requesterSafetyPlannedShutdownDate: e.target.value } as any)
                         }
                       />
                     </div>
 
                     <div className="mt-3">
                       <div className="mt-2 space-y-1">
-                        {(form.approverCustomComments || []).map(
+                        {((form as any).requesterSafetyCustomComments || []).map(
                           (item: any, idx: number) => {
                             const text =
                               typeof item === "string" ? item : item.text;
@@ -4099,7 +4312,7 @@ export default function CreatePermit() {
                                     checked={checked}
                                     onChange={(e) => {
                                       const prev =
-                                        form.approverCustomComments || [];
+                                        (form as any).requesterSafetyCustomComments || [];
                                       const next = prev.map(
                                         (it: any, i: number) => {
                                           if (i !== idx) return it;
@@ -4114,7 +4327,7 @@ export default function CreatePermit() {
                                           };
                                         },
                                       );
-                                      update({ approverCustomComments: next });
+                                      update({ requesterSafetyCustomComments: next } as any);
                                     }}
                                   />
                                   <span className="text-sm">{text}</span>
@@ -4125,11 +4338,11 @@ export default function CreatePermit() {
                                     aria-label={`Delete comment ${idx + 1}`}
                                     onClick={() => {
                                       const prev =
-                                        form.approverCustomComments || [];
+                                        (form as any).requesterSafetyCustomComments || [];
                                       const next = prev.filter(
                                         (_: any, i: number) => i !== idx,
                                       );
-                                      update({ approverCustomComments: next });
+                                      update({ requesterSafetyCustomComments: next } as any);
                                     }}
                                     className="text-xs text-red-600 hover:underline px-2 py-1"
                                   >
@@ -4147,23 +4360,24 @@ export default function CreatePermit() {
                         <input
                           placeholder="Add comment"
                           className="flex-1 rounded border px-3 py-2 text-sm"
-                          value={newApproverComment}
+                          value={newRequesterSafetyComment}
                           onChange={(e) =>
-                            setNewApproverComment(e.target.value)
+                            setNewRequesterSafetyComment(e.target.value)
                           }
                         />
                         <button
+                          type="button"
                           onClick={() => {
-                            const v = newApproverComment.trim();
+                            const v = newRequesterSafetyComment.trim();
                             if (!v) return;
-                            const prev = form.approverCustomComments || [];
+                            const prev = (form as any).requesterSafetyCustomComments || [];
                             update({
-                              approverCustomComments: [
+                              requesterSafetyCustomComments: [
                                 ...prev,
                                 { text: v, checked: false },
                               ],
-                            });
-                            setNewApproverComment("");
+                            } as any);
+                            setNewRequesterSafetyComment("");
                           }}
                           className="px-3 py-1 rounded bg-white border text-sm"
                         >

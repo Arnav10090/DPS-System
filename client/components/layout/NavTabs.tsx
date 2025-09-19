@@ -20,17 +20,26 @@ export default function NavTabs() {
   const role =
     typeof window !== "undefined" ? localStorage.getItem("dps_role") || "" : "";
 
+  const permitDetailsPath =
+    role === "approver"
+      ? "/approver-permit-details"
+      : role === "safety"
+      ? "/safety-permit-details"
+      : "/permit-details";
   const baseTabs: TabItem[] = [
     { to: "/", label: "Main Dashboard" },
-    { to: "/permit-details", label: "Permit Details", hideForApprover: true, hideForSafetyOfficer: true, hideForAdmin: true },
+    // Permit Details should be available to Requester, Approver, and Safety Officer
+    // Route approvers to the dedicated ApproverPermitDetails page
+    { to: permitDetailsPath, label: "Permit Details", hideForAdmin: true },
   ];
 
   const otherTabs: TabItem[] = [
     { to: "/overall-status", label: "Overall Permit Status" },
     { to: "/contractor-performance", label: <p>Contractor Performances</p>, hideForRequester: true, hideForAdmin: true },
     { to: "/alarms", label: "Alarms" },
-    { to: "/system-architecture", label: "System Architecture", hideForRequester: true, hideForApprover: true, hideForSafetyOfficer: true },
+    // Place Spare Tab immediately to the right of Alarms
     { to: "/spare", label: "Spare Tab" },
+    { to: "/system-architecture", label: "System Architecture", hideForRequester: true, hideForApprover: true, hideForSafetyOfficer: true },
   ];
 
   // Filter base tabs for specific roles
@@ -50,6 +59,7 @@ export default function NavTabs() {
   }
   if (role === "requester") {
     tabs.push({ to: "/work-closure-request", label: "Work Closure Request" });
+    tabs.push({ to: "/permits-closed", label: "Permits Closed" });
   }
   if (role === "approver") {
     // Approver-specific navigation items inserted after Permit Details
@@ -70,8 +80,8 @@ export default function NavTabs() {
 
   return (
     <nav className="sticky top-16 z-40 bg-[#f5f5f5] border-b">
-      <div className="mx-auto max-w-7xl px-4 py-2">
-        <ul className="flex flex-wrap gap-2">
+      <div className="mx-auto max-w-none w-full px-4 py-2">
+        <ul className="flex flex-nowrap justify-center gap-2 whitespace-nowrap">
           {tabs.map((t) => (
             <li key={String(t.to)}>
               {inRouter ? (
@@ -80,14 +90,20 @@ export default function NavTabs() {
                   end={t.to === "/"}
                   className={({ isActive }) => {
                     // keep Permit Details tab active for ht-permit and gas-permit routes as they're part of the Permit Details section
+                    const isPermitTab =
+                      t.to === "/permit-details" ||
+                      t.to === "/approver-permit-details" ||
+                      t.to === "/safety-permit-details";
                     const manualActive =
-                      t.to === "/permit-details" &&
+                      isPermitTab &&
                       (location.pathname === "/ht-permit" ||
                         location.pathname === "/gas-permit" ||
-                        location.pathname.startsWith("/permit-details"));
+                        location.pathname.startsWith("/permit-details") ||
+                        location.pathname.startsWith("/approver-permit-details") ||
+                        location.pathname.startsWith("/safety-permit-details"));
                     const active = isActive || manualActive;
                     return [
-                      "inline-flex items-center rounded-full px-4 py-2 text-sm transition-colors",
+                      "inline-flex items-center rounded-full px-4 py-2 text-[14px] transition-colors",
                       active
                         ? "bg-[#4CAF50] text-white shadow"
                         : "bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900 border",

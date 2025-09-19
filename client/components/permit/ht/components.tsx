@@ -754,6 +754,586 @@ export function HTPermitHeader() {
 }
 
 // Wizard
+// 1. Fix StepPermitDetailsHT function - add missing variables and state management
+function StepPermitDetailsHT() {
+  const { getValues } = useFormContext<PermitFormData>();
+  const permitId = getValues().permitId;
+
+  const storageKey = `ht-permit-details-${permitId}`;
+  const [state, setState] = useState(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      return raw
+        ? JSON.parse(raw)
+        : {
+            permitRequester: "",
+            permitApprover1: "",
+            permitApprover2: "",
+            safetyManager: "",
+            permitIssueDate: "",
+            expectedReturnDate: "",
+            requesterRequireUrgent: false,
+            requesterSafetyManagerApproval: false,
+            requesterPlannedShutdown: false,
+            requesterPlannedShutdownDate: "",
+            requesterCustomComments: [] as Array<
+              string | { text: string; checked?: boolean }
+            >,
+            requesterSafetyRequireUrgent: false,
+            requesterSafetySafetyManagerApproval: false,
+            requesterSafetyPlannedShutdown: false,
+            requesterSafetyPlannedShutdownDate: "",
+            requesterSafetyCustomComments: [] as Array<
+              string | { text: string; checked?: boolean }
+            >,
+          };
+    } catch {
+      return {
+        permitRequester: "",
+        permitApprover1: "",
+        permitApprover2: "",
+        safetyManager: "",
+        permitIssueDate: "",
+        expectedReturnDate: "",
+        requesterRequireUrgent: false,
+        requesterSafetyManagerApproval: false,
+        requesterPlannedShutdown: false,
+        requesterPlannedShutdownDate: "",
+        requesterCustomComments: [] as Array<
+          string | { text: string; checked?: boolean }
+        >,
+        requesterSafetyRequireUrgent: false,
+        requesterSafetySafetyManagerApproval: false,
+        requesterSafetyPlannedShutdown: false,
+        requesterSafetyPlannedShutdownDate: "",
+        requesterSafetyCustomComments: [] as Array<
+          string | { text: string; checked?: boolean }
+        >,
+      };
+    }
+  });
+
+  // Add missing state variables
+  const [newRequesterComment, setNewRequesterComment] = useState("");
+  const [newRequesterSafetyComment, setNewRequesterSafetyComment] =
+    useState("");
+
+  // Fix the form reference - should use state instead of undefined form
+  const form = state;
+
+  const update = (patch: any) => setState((s: any) => ({ ...s, ...patch }));
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch {}
+  }, [state, storageKey]);
+
+  return (
+    <StepSection title="Details of such permit">
+      <div className="space-y-6">
+        <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
+          <div className="text-center bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold py-3 rounded-md">
+            Details of such permit
+          </div>
+          <div className="mt-4 space-y-4">
+            <div className="p-2 rounded-md border">
+              <div className="text-xs text-gray-500">Permit Requester</div>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  placeholder="Search user..."
+                  className="w-full rounded border px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="p-2 rounded-md border">
+              <div className="text-xs text-gray-500">Permit Approver 1</div>
+              <input
+                aria-label="Permit Approver 1"
+                value={form.permitApprover1 || ""}
+                onChange={(e) => update({ permitApprover1: e.target.value })}
+                className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                placeholder="Approver name or role"
+              />
+            </div>
+
+            <div className="p-2 rounded-md border">
+              <div className="text-xs text-gray-500">Permit Approver 2</div>
+              <input
+                aria-label="Permit Approver 2"
+                value={form.permitApprover2 || ""}
+                onChange={(e) => update({ permitApprover2: e.target.value })}
+                className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                placeholder="Approver name or role"
+              />
+            </div>
+
+            <div className="p-2 rounded-md border">
+              <div className="text-xs text-gray-500">Safety Manager</div>
+              <input
+                aria-label="Safety Manager"
+                value={form.safetyManager || ""}
+                onChange={(e) => update({ safetyManager: e.target.value })}
+                className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                placeholder="Safety Manager name/department"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500">
+                  Permit Issue Date
+                </label>
+                <input
+                  type="date"
+                  value={form.permitIssueDate || ""}
+                  onChange={(e) => update({ permitIssueDate: e.target.value })}
+                  className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">
+                  Expected Return Date
+                </label>
+                <input
+                  type="date"
+                  value={form.expectedReturnDate || ""}
+                  onChange={(e) =>
+                    update({ expectedReturnDate: e.target.value })
+                  }
+                  className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Read-only comments sections - MOVED TO TOP */}
+            {(() => {
+              try {
+                const raw =
+                  typeof window !== "undefined"
+                    ? localStorage.getItem("dps_approver_comments")
+                    : null;
+                const data = raw ? JSON.parse(raw) : null;
+                const hasAny = !!(
+                  data &&
+                  (data.approverRequireUrgent ||
+                    data.approverSafetyManagerApproval ||
+                    data.approverPlannedShutdown ||
+                    (data.approverCustomComments || []).length > 0)
+                );
+                return (
+                  <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                    <div className="text-md font-medium">
+                      Comments from Approver:
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm">
+                      {hasAny ? (
+                        <>
+                          {data?.approverRequireUrgent && (
+                            <div>Complete your work in timely manner</div>
+                          )}
+                          {data?.approverSafetyManagerApproval && (
+                            <div>Involve safety person while working</div>
+                          )}
+                          {(data?.approverPlannedShutdown ||
+                            data?.approverPlannedShutdownDate) && (
+                            <div>
+                              Ensure shutdown on this date is confirmed before
+                              start of work:{" "}
+                              {data?.approverPlannedShutdownDate || ""}
+                            </div>
+                          )}
+                          {(data?.approverCustomComments || []).map(
+                            (it: any, i: number) => (
+                              <div key={i}>
+                                - {typeof it === "string" ? it : it.text}
+                              </div>
+                            ),
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-gray-500">
+                          No comments from approver yet
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              } catch (e) {
+                return (
+                  <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                    <div className="text-md font-medium">
+                      Comments from Approver:
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm text-gray-500">
+                      No comments from approver yet
+                    </div>
+                  </div>
+                );
+              }
+            })()}
+
+            {/* Safety Officer comments (read-only) */}
+            {(() => {
+              try {
+                const raw =
+                  typeof window !== "undefined"
+                    ? localStorage.getItem("dps_SafetyOfficer_comments")
+                    : null;
+                const sData = raw ? JSON.parse(raw) : null;
+                const sHasAny = !!(
+                  sData &&
+                  (sData.SafetyOfficerRequireUrgent ||
+                    sData.SafetyOfficerSafetyManagerApproval ||
+                    sData.SafetyOfficerPlannedShutdown ||
+                    (sData.SafetyOfficerCustomComments || []).length > 0)
+                );
+                return (
+                  <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                    <div className="text-md font-medium">
+                      Comments from Safety Officer:
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm">
+                      {sHasAny ? (
+                        <>
+                          {sData?.SafetyOfficerRequireUrgent && (
+                            <div>Complete your work in timely manner</div>
+                          )}
+                          {sData?.SafetyOfficerSafetyManagerApproval && (
+                            <div>Involve safety person while working</div>
+                          )}
+                          {(sData?.SafetyOfficerPlannedShutdown ||
+                            sData?.SafetyOfficerPlannedShutdownDate) && (
+                            <div>
+                              Ensure shutdown on this date is confirmed before
+                              start of work:{" "}
+                              {sData?.SafetyOfficerPlannedShutdownDate || ""}
+                            </div>
+                          )}
+                          {(sData?.SafetyOfficerCustomComments || []).map(
+                            (it: any, i: number) => (
+                              <div key={i}>
+                                - {typeof it === "string" ? it : it.text}
+                              </div>
+                            ),
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-gray-500">
+                          No comments from safety officer yet
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              } catch (e) {
+                return (
+                  <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                    <div className="text-md font-medium">
+                      Comments from Safety Officer:
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm text-gray-500">
+                      No comments from safety officer yet
+                    </div>
+                  </div>
+                );
+              }
+            })()}
+
+            {/* Editable comments sections - MOVED TO BOTTOM */}
+            <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+              <div className="text-md font-medium">Comments for Approver:</div>
+              <label className="flex items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  checked={!!form.requesterRequireUrgent}
+                  onChange={(e) =>
+                    update({ requesterRequireUrgent: e.target.checked })
+                  }
+                />
+                Require on urgent basis
+              </label>
+              <label className="flex items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  checked={!!form.requesterSafetyManagerApproval}
+                  onChange={(e) =>
+                    update({
+                      requesterSafetyManagerApproval: e.target.checked,
+                    })
+                  }
+                />
+                Safety Manager approval required
+              </label>
+              <div className="mt-2 text-md flex items-center gap-2">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!form.requesterPlannedShutdown}
+                    onChange={(e) =>
+                      update({
+                        requesterPlannedShutdown: e.target.checked,
+                      })
+                    }
+                  />
+                  <span>Planned shutdown on:</span>
+                </label>
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-sm"
+                  value={form.requesterPlannedShutdownDate || ""}
+                  onChange={(e) =>
+                    update({
+                      requesterPlannedShutdownDate: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              {/* Custom comments section */}
+              <div className="mt-3">
+                <div className="mt-2 space-y-1">
+                  {(form.requesterCustomComments || []).map(
+                    (item: any, idx: number) => {
+                      const text = typeof item === "string" ? item : item.text;
+                      const checked =
+                        typeof item === "string" ? false : !!item.checked;
+                      return (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2 w-full"
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const prev = form.requesterCustomComments || [];
+                                const next = prev.map((it: any, i: number) => {
+                                  if (i !== idx) return it;
+                                  if (typeof it === "string")
+                                    return {
+                                      text: it,
+                                      checked: e.target.checked,
+                                    };
+                                  return {
+                                    ...it,
+                                    checked: e.target.checked,
+                                  };
+                                });
+                                update({ requesterCustomComments: next });
+                              }}
+                            />
+                            <span className="text-sm">{text}</span>
+                          </div>
+                          <div>
+                            <button
+                              type="button"
+                              aria-label={`Delete comment ${idx + 1}`}
+                              onClick={() => {
+                                const prev = form.requesterCustomComments || [];
+                                const next = prev.filter(
+                                  (_: any, i: number) => i !== idx,
+                                );
+                                update({ requesterCustomComments: next });
+                              }}
+                              className="text-xs text-red-600 hover:underline px-2 py-1"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+
+                <p className="text-xs font-medium mt-2">Add comment</p>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    placeholder="Add comment"
+                    className="flex-1 rounded border px-3 py-2 text-sm"
+                    value={newRequesterComment}
+                    onChange={(e) => setNewRequesterComment(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const v = newRequesterComment.trim();
+                      if (!v) return;
+                      const prev = form.requesterCustomComments || [];
+                      update({
+                        requesterCustomComments: [
+                          ...prev,
+                          { text: v, checked: false },
+                        ],
+                      });
+                      setNewRequesterComment("");
+                    }}
+                    className="px-3 py-1 rounded bg-white border text-sm"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Comments for Safety Officer */}
+            <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+              <div className="text-md font-medium">
+                Comments for Safety Officer:
+              </div>
+              <label className="flex items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  checked={!!form.requesterSafetyRequireUrgent}
+                  onChange={(e) =>
+                    update({
+                      requesterSafetyRequireUrgent: e.target.checked,
+                    })
+                  }
+                />
+                Require on urgent basis
+              </label>
+              <label className="flex items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  checked={!!form.requesterSafetySafetyManagerApproval}
+                  onChange={(e) =>
+                    update({
+                      requesterSafetySafetyManagerApproval: e.target.checked,
+                    })
+                  }
+                />
+                Approver approval required
+              </label>
+              <div className="mt-2 text-md flex items-center gap-2">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!form.requesterSafetyPlannedShutdown}
+                    onChange={(e) =>
+                      update({
+                        requesterSafetyPlannedShutdown: e.target.checked,
+                      })
+                    }
+                  />
+                  <span>Planned shutdown on:</span>
+                </label>
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-sm"
+                  value={form.requesterSafetyPlannedShutdownDate || ""}
+                  onChange={(e) =>
+                    update({
+                      requesterSafetyPlannedShutdownDate: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              {/* Safety custom comments */}
+              <div className="mt-3">
+                <div className="mt-2 space-y-1">
+                  {(form.requesterSafetyCustomComments || []).map(
+                    (item: any, idx: number) => {
+                      const text = typeof item === "string" ? item : item.text;
+                      const checked =
+                        typeof item === "string" ? false : !!item.checked;
+                      return (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2 w-full"
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const prev =
+                                  form.requesterSafetyCustomComments || [];
+                                const next = prev.map((it: any, i: number) => {
+                                  if (i !== idx) return it;
+                                  if (typeof it === "string")
+                                    return {
+                                      text: it,
+                                      checked: e.target.checked,
+                                    };
+                                  return {
+                                    ...it,
+                                    checked: e.target.checked,
+                                  };
+                                });
+                                update({
+                                  requesterSafetyCustomComments: next,
+                                });
+                              }}
+                            />
+                            <span className="text-sm">{text}</span>
+                          </div>
+                          <div>
+                            <button
+                              type="button"
+                              aria-label={`Delete comment ${idx + 1}`}
+                              onClick={() => {
+                                const prev =
+                                  form.requesterSafetyCustomComments || [];
+                                const next = prev.filter(
+                                  (_: any, i: number) => i !== idx,
+                                );
+                                update({
+                                  requesterSafetyCustomComments: next,
+                                });
+                              }}
+                              className="text-xs text-red-600 hover:underline px-2 py-1"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+
+                <p className="text-xs font-medium mt-2">Add comment</p>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    placeholder="Add comment"
+                    className="flex-1 rounded border px-3 py-2 text-sm"
+                    value={newRequesterSafetyComment}
+                    onChange={(e) =>
+                      setNewRequesterSafetyComment(e.target.value)
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const v = newRequesterSafetyComment.trim();
+                      if (!v) return;
+                      const prev = form.requesterSafetyCustomComments || [];
+                      update({
+                        requesterSafetyCustomComments: [
+                          ...prev,
+                          { text: v, checked: false },
+                        ],
+                      });
+                      setNewRequesterSafetyComment("");
+                    }}
+                    className="px-3 py-1 rounded bg-white border text-sm"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </StepSection>
+  );
+}
 export function FormWizard({
   initial,
   onSaveDraft,
@@ -813,9 +1393,41 @@ export function FormWizard({
       name: "Re-energizing Authorization",
       desc: "Final system restoration",
     },
+    {
+      id: "permitDetails",
+      name: "Permit Details",
+      desc: "Final review and submission",
+    },
   ];
 
   const key = `ht-permit-${initial.permitId}`;
+
+  // Role-based restriction: approver and safety officers should only see Permit Details
+  const isRestricted = useMemo(() => {
+    try {
+      const role =
+        typeof window !== "undefined" ? localStorage.getItem("dps_role") : null;
+      return role === "approver" || role === "safety";
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const permitDetailsIndex = useMemo(
+    () => steps.findIndex((s) => s.id === "permitDetails"),
+    [],
+  );
+
+  // When restricted, force the current step to Permit Details
+  useEffect(() => {
+    if (isRestricted && current !== permitDetailsIndex && permitDetailsIndex >= 0) {
+      setCurrent(permitDetailsIndex);
+    }
+  }, [isRestricted, permitDetailsIndex, current]);
+
+  // Steps to render in the UI
+  const uiSteps = isRestricted && permitDetailsIndex >= 0 ? [steps[permitDetailsIndex]] : steps;
+  const uiCurrent = isRestricted ? 0 : current;
 
   // Auto-save every 30s
   useEffect(() => {
@@ -838,10 +1450,13 @@ export function FormWizard({
     return () => sub.unsubscribe();
   }, [methods, key]);
 
+  // watch all form values so progress updates reactively as fields change
+  const formValues = methods.watch();
+
   const completedCount = useMemo(() => {
     // simple heuristic: steps with required minimal fields valid
     let count = 0;
-    const data = methods.getValues();
+    const data = formValues as PermitFormData;
     try {
       basicDetailsSchema.parse(data.stepData.basic);
       count++;
@@ -877,7 +1492,7 @@ export function FormWizard({
       count++;
     } catch {}
     return count;
-  }, [methods]);
+  }, [formValues]);
 
   const validateCurrent = async () => {
     const id = steps[current].id as keyof PermitFormData["stepData"];
@@ -957,13 +1572,14 @@ export function FormWizard({
     <FormProvider {...methods}>
       <div className="space-y-6">
         <ModernPagination
-          steps={steps.map((s, i) => ({
+          steps={uiSteps.map((s, i) => ({
             title: s.name,
             description: s.desc,
-            completed: i < completedCount,
+            // Match GasPermit behavior: all steps before the current are marked completed (green)
+            completed: i < uiCurrent,
           }))}
-          currentStep={current}
-          onStepChange={setCurrent}
+          currentStep={uiCurrent}
+          onStepChange={isRestricted ? () => {} : setCurrent}
           showProgress={true}
           allowClickNavigation={true}
           variant="numbered"
@@ -973,29 +1589,34 @@ export function FormWizard({
             {renderHeader()}
           </div>
         )}
-        {steps[current].id === "basic" && <StepBasic />}
-        {steps[current].id === "workAuth" && <StepWorkAuth />}
-        {steps[current].id === "deEnergize" && <StepDeEnergize />}
-        {steps[current].id === "permitToWork" && <StepPermitToWork />}
-        {steps[current].id === "preExecution" && <StepPreExecution />}
-        {steps[current].id === "jobCompletion" && <StepJobCompletion />}
-        {steps[current].id === "reEnergizeInstruction" && (
+        {!isRestricted && steps[current].id === "basic" && <StepBasic />}
+        {!isRestricted && steps[current].id === "workAuth" && <StepWorkAuth />}
+        {!isRestricted && steps[current].id === "deEnergize" && <StepDeEnergize />}
+        {!isRestricted && steps[current].id === "permitToWork" && <StepPermitToWork />}
+        {!isRestricted && steps[current].id === "preExecution" && <StepPreExecution />}
+        {!isRestricted && steps[current].id === "jobCompletion" && <StepJobCompletion />}
+        {!isRestricted && steps[current].id === "reEnergizeInstruction" && (
           <StepReEnergizeInstruction />
         )}
-        {steps[current].id === "reEnergizeAuthorization" && (
+        {!isRestricted && steps[current].id === "reEnergizeAuthorization" && (
           <StepReEnergizeAuthorization />
+        )}
+        {(isRestricted || steps[current].id === "permitDetails") && (
+          <StepPermitDetailsHT />
         )}
 
         <StepActions
-          onBack={back}
+          onBack={isRestricted ? () => {} : back}
           onSave={save}
-          onNext={current === steps.length - 1 ? submit : next}
+          onNext={isRestricted || current === steps.length - 1 ? submit : next}
           nextLabel={
-            current === steps.length - 1 ? "Submit Permit" : "Next Step"
+            isRestricted || current === steps.length - 1
+              ? "Submit Permit"
+              : "Next Step"
           }
           disableNext={false}
-          isFirst={current === 0}
-          isLast={current === steps.length - 1}
+          isFirst={isRestricted ? true : current === 0}
+          isLast={isRestricted ? true : current === steps.length - 1}
           onPreview={() => setShowPreview(true)}
           previewLabel="Preview"
         />

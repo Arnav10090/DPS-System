@@ -30,15 +30,15 @@ export default function AuthPage() {
   const onSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setError(null);
-    // simple validation
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-    if (!password || password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
+    // TEMP: disable email/password constraints for testing. Restore validation later.
+    // if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    //   setError("Please enter a valid email address.");
+    //   return;
+    // }
+    // if (!password || password.length < 6) {
+    //   setError("Password must be at least 6 characters.");
+    //   return;
+    // }
     setLoading(true);
     // simulate request
     await new Promise((r) => setTimeout(r, 900));
@@ -51,6 +51,26 @@ export default function AuthPage() {
     }
     // on success redirect to main dashboard
     navigate("/");
+  };
+
+  const getUserNameByRole = (role: Role): string => {
+    const names = {
+      requester: "A. Sharma",
+      approver: "V. Rao",
+      safety: "S. Officer",
+      admin: "Admin User",
+    };
+    return names[role] || "Unknown User";
+  };
+
+  const getDepartmentByRole = (role: Role): string => {
+    const departments = {
+      requester: "Maintenance",
+      approver: "Operations",
+      safety: "Safety Department",
+      admin: "IT Administration",
+    };
+    return departments[role] || "General";
   };
 
   const primaryColor = ROLE_META[role].color;

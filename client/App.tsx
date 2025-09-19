@@ -14,6 +14,8 @@ import Forgot from "./pages/Forgot";
 import Layout from "@/components/layout/Layout";
 import RootRedirect from "@/components/common/RootRedirect";
 import PermitDetails from "@/pages/PermitDetails";
+import ApproverPermitDetails from "@/pages/ApproverPermitDetails";
+import SafetyPermitDetails from "@/pages/SafetyPermitDetails";
 import HTPermitForm from "@/pages/HTPermitForm";
 import GasPermit from "./pages/GasPermit";
 import WorkClosureRequest from "./pages/WorkClosureRequest";
@@ -24,6 +26,7 @@ import Users from "./pages/Users";
 import RolesPermissions from "./pages/RolesPermissions";
 import WorkClosureFlow from "./pages/WorkClosureFlow";
 import FormBuilder from "./pages/FormBuilder";
+import PermitsClosed from "./pages/Permits-closed";
 import {
   Alarms,
   ContractorPerformance,
@@ -44,6 +47,14 @@ const App = () => (
           <Route path="/" element={<Layout />}>
             <Route index element={<RootRedirect />} />
             <Route path="permit-details" element={<PermitDetails />} />
+            <Route
+              path="approver-permit-details"
+              element={<ApproverPermitDetails />}
+            />
+            <Route
+              path="safety-permit-details"
+              element={<SafetyPermitDetails />}
+            />
             <Route path="users" element={<Users />} />
             <Route path="roles-permissions" element={<RolesPermissions />} />
             <Route path="work-closure-flow" element={<WorkClosureFlow />} />
@@ -58,6 +69,7 @@ const App = () => (
             />
             <Route path="approval-queue" element={<ApprovalQueue />} />
             <Route path="review-permits" element={<ReviewPermits />} />
+            <Route path="permits-closed" element={<PermitsClosed />} />
             <Route path="overall-status" element={<OverallStatus />} />
             <Route
               path="contractor-performance"

@@ -416,7 +416,20 @@ export default function HTPermitForm() {
             <Select
               value={"highTension"}
               onValueChange={(v) => {
-                if (v === "work") navigate("/permit-details");
+                if (v === "work") {
+                  const role =
+                    typeof window !== "undefined"
+                      ? localStorage.getItem("dps_role")
+                      : null;
+                  if (role === "approver") {
+                    navigate("/approver-permit-details");
+                  } else if (role === "safety") {
+                    navigate("/safety-permit-details");
+                  } else {
+                    navigate("/permit-details");
+                  }
+                  return;
+                }
                 if (v === "highTension") return;
                 if (v === "gasLine") navigate("/gas-permit");
               }}

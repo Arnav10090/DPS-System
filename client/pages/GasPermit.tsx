@@ -157,12 +157,32 @@ export default function GasPermit() {
       { id: "limits", name: "Gas Safety Limits (Part C)" },
       { id: "permit", name: "Permit Authorization (Part D)" },
       { id: "closure", name: "Work Completion (Part E)" },
+      { id: "details", name: "Permit Details" },
     ],
     [],
   );
 
   const [current, setCurrent] = useState(0);
+  // Role-based restriction: approver and safety officers should only see Permit Details
+  const isRestricted = useMemo(() => {
+    try {
+      const role =
+        typeof window !== "undefined" ? localStorage.getItem("dps_role") : null;
+      return role === "approver" || role === "safety";
+    } catch {
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isRestricted && current !== 5) setCurrent(5);
+  }, [isRestricted, current]);
+
+  const uiSteps = isRestricted ? [steps[5]] : steps;
+  const uiCurrent = isRestricted ? 0 : current;
   const [showPreview, setShowPreview] = useState(false);
+  const [newRequesterComment, setNewRequesterComment] = useState("");
+  const [newRequesterSafetyComment, setNewRequesterSafetyComment] = useState("");
   const storageKey = "gas-permit-draft";
 
   const [form, setForm] = useState(() => {
@@ -172,6 +192,24 @@ export default function GasPermit() {
         ? JSON.parse(raw)
         : {
             header: { certificateNo: "", permitNo: "" },
+            permitDetails: {
+              permitRequester: "",
+              permitApprover1: "",
+              permitApprover2: "",
+              safetyManager: "",
+              permitIssueDate: "",
+              expectedReturnDate: "",
+              requesterRequireUrgent: false,
+              requesterSafetyManagerApproval: false,
+              requesterPlannedShutdown: false,
+              requesterPlannedShutdownDate: "",
+              requesterCustomComments: [],
+              requesterSafetyRequireUrgent: false,
+              requesterSafetySafetyManagerApproval: false,
+              requesterSafetyPlannedShutdown: false,
+              requesterSafetyPlannedShutdownDate: "",
+              requesterSafetyCustomComments: [],
+            },
             partA: {
               issuerName: "",
               crossRef: "",
@@ -211,11 +249,72 @@ export default function GasPermit() {
                 time: "",
               },
               acceptorConfirmed: false,
-              closed: false,
+              workCompleted: false,
             },
           };
     } catch (e) {
-      return {} as any;
+      return {
+        header: { certificateNo: "", permitNo: "" },
+        permitDetails: {
+          permitRequester: "",
+          permitApprover1: "",
+          permitApprover2: "",
+          safetyManager: "",
+          permitIssueDate: "",
+          expectedReturnDate: "",
+          requesterRequireUrgent: false,
+          requesterSafetyManagerApproval: false,
+          requesterPlannedShutdown: false,
+          requesterPlannedShutdownDate: "",
+          requesterCustomComments: [],
+          requesterSafetyRequireUrgent: false,
+          requesterSafetySafetyManagerApproval: false,
+          requesterSafetyPlannedShutdown: false,
+          requesterSafetyPlannedShutdownDate: "",
+          requesterSafetyCustomComments: [],
+        },
+        partA: {
+          issuerName: "",
+          crossRef: "",
+          department: "",
+          location: "",
+          description: "",
+          fromDate: "",
+          fromTime: "",
+          toDate: "",
+          toTime: "",
+        },
+        partB: checklistItems,
+        partC: {},
+        partD: {
+          confirmation: false,
+          issuerName: "",
+          issuerSignature: "",
+          issuerContact: "",
+          issuerDate: "",
+          issuerTime: "",
+        },
+        partE: {
+          acceptor: {
+            authority: "",
+            name: "",
+            signature: "",
+            contact: "",
+            date: "",
+            time: "",
+          },
+          issuer: {
+            authority: "",
+            name: "",
+            signature: "",
+            contact: "",
+            date: "",
+            time: "",
+          },
+          acceptorConfirmed: false,
+          workCompleted: false,
+        },
+      };
     }
   });
 
@@ -275,12 +374,23 @@ export default function GasPermit() {
     );
   };
 
+  const validatePartE = () => {
+    const e = form.partE || {};
+    return (
+      !!e.acceptorConfirmed &&
+      !!e.workCompleted &&
+      !!e.acceptor?.name &&
+      !!e.issuer?.name
+    );
+  };
+
   const canNext = () => {
     if (current === 0) return validatePartA();
     if (current === 1) return validatePartB();
     if (current === 2) return true;
     if (current === 3) return validatePartD();
-    if (current === 4) return form.partE?.closed === true;
+    if (current === 4) return validatePartE();
+    if (current === 5) return true;
     return true;
   };
 
@@ -316,7 +426,17 @@ export default function GasPermit() {
                 if (v === "highTension") {
                   navigate("/ht-permit");
                 } else if (v === "work") {
-                  navigate("/permit-details");
+                  const role =
+                    typeof window !== "undefined"
+                      ? localStorage.getItem("dps_role")
+                      : null;
+                  if (role === "approver") {
+                    navigate("/approver-permit-details");
+                  } else if (role === "safety") {
+                    navigate("/safety-permit-details");
+                  } else {
+                    navigate("/permit-details");
+                  }
                 } else {
                   // stay on gas permit
                 }
@@ -338,48 +458,77 @@ export default function GasPermit() {
       </header>
 
       <ModernPagination
-        steps={steps.map((s) => s.name)}
-        currentStep={current}
-        onStepChange={(i) => setCurrent(i)}
+        steps={uiSteps.map((s) => s.name)}
+        currentStep={uiCurrent}
+        onStepChange={isRestricted ? () => {} : (i) => setCurrent(i)}
         showProgress
         allowClickNavigation
         variant="numbered"
       />
 
       <div className="bg-white border-b">
-        <div className="max-w-[1400px] mx-auto px-4 py-4 flex items-start justify-between">
-          <div className="text-left">
-            <div className="text-sm font-semibold">AM/NS INDIA</div>
-            <div className="text-lg font-bold">
-              ArcelorMittal Nippon Steel India Limited
+        {isRestricted ? (
+          <div className="mx-auto max-w-7xl px-4 py-4 flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <img src="/placeholder.svg" alt="AM/NS INDIA logo" className="h-[60px] w-auto" />
             </div>
-            <div className="text-sm text-gray-600">HAZIRA</div>
-            <div className="mt-2 text-xl font-bold">
-              ADDITIONAL WORK PERMIT FOR GAS LINE / EQUIPMENT
+            <div className="text-center">
+              <div className="font-bold text-gray-900">ArcelorMittal Nippon Steel India Limited</div>
+              <div className="text-gray-600">HAZIRA</div>
+              <div className="mt-1 text-[20px] font-bold text-gray-900">
+                ADDITIONAL WORK PERMIT FOR GAS LINE / EQUIPMENT
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 w-[240px]">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Certificate No.</label>
+                <input
+                  value={form.header.certificateNo}
+                  readOnly
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-2 focus:border-blue-600 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Permit No.</label>
+                <input
+                  value={form.header.permitNo}
+                  readOnly
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-2 focus:border-blue-600 focus:outline-none"
+                />
+              </div>
             </div>
           </div>
-          <div className="w-56">
-            <div className="mb-2">
-              <label className="text-sm text-gray-700">Certificate No.</label>
-              <input
-                value={form.header.certificateNo}
-                readOnly
-                className="w-full rounded-md border px-2 py-2 text-sm bg-white"
-              />
+        ) : (
+          <div className="max-w-[1400px] mx-auto px-4 py-4 flex items-start justify-between">
+            <div className="text-left">
+              <div className="text-sm font-semibold">AM/NS INDIA</div>
+              <div className="text-lg font-bold">ArcelorMittal Nippon Steel India Limited</div>
+              <div className="text-sm text-gray-600">HAZIRA</div>
+              <div className="mt-2 text-xl font-bold">ADDITIONAL WORK PERMIT FOR GAS LINE / EQUIPMENT</div>
             </div>
-            <div>
-              <label className="text-sm text-gray-700">Permit No.</label>
-              <input
-                value={form.header.permitNo}
-                readOnly
-                className="w-full rounded-md border px-2 py-2 text-sm bg-white"
-              />
+            <div className="w-56">
+              <div className="mb-2">
+                <label className="text-sm text-gray-700">Certificate No.</label>
+                <input
+                  value={form.header.certificateNo}
+                  readOnly
+                  className="w-full rounded-md border px-2 py-2 text-sm bg-white"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-700">Permit No.</label>
+                <input
+                  value={form.header.permitNo}
+                  readOnly
+                  className="w-full rounded-md border px-2 py-2 text-sm bg-white"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {current === 0 && (
+      {!isRestricted && current === 0 && (
         <StepSection
           title="Part - A: AUTHORISATION TO WORK"
           subtitle="(To be filled-up by Permit Issuer)"
@@ -474,7 +623,7 @@ export default function GasPermit() {
         </StepSection>
       )}
 
-      {current === 1 && (
+      {!isRestricted && current === 1 && (
         <StepSection
           title="Part - B: MANDATORY CONDITIONS"
           subtitle="(To be filled-up Jointly by Permit Issuer & Acceptor)"
@@ -528,8 +677,6 @@ export default function GasPermit() {
                         aria-pressed={row.answer === "yes"}
                         onClick={() => {
                           const next = row.answer === "yes" ? "" : "yes";
-                          const copy = [...(form.partB || [])];
-                          copy[idx] = { ...copy[idx], answer: next };
                           update(`partB.${idx}.answer`, next);
                         }}
                         className={cn(
@@ -577,7 +724,7 @@ export default function GasPermit() {
         </StepSection>
       )}
 
-      {current === 2 && (
+      {!isRestricted && current === 2 && (
         <StepSection
           title="Part - C: SAFE LIMITS OF GASES / VAPOURS"
           subtitle="(To be checked By Permit Issuer & Permit Acceptor)"
@@ -586,7 +733,7 @@ export default function GasPermit() {
         </StepSection>
       )}
 
-      {current === 3 && (
+      {!isRestricted && current === 3 && (
         <StepSection
           title="Part - D: PERMIT AUTHORISATION"
           subtitle="(To be filled-up by Permit Issuer)"
@@ -678,7 +825,7 @@ export default function GasPermit() {
         </StepSection>
       )}
 
-      {current === 4 && (
+      {!isRestricted && current === 4 && (
         <StepSection
           title="Part - E: Work Permit Closure"
           subtitle="(To be signed by Permit Issuer & Permit Acceptor)"
@@ -879,12 +1026,518 @@ export default function GasPermit() {
         </StepSection>
       )}
 
+      {(isRestricted || current === 5) && (
+        <StepSection title="Details of such permit">
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
+              <div className="text-center bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold py-3 rounded-md">
+                Details of such permit
+              </div>
+              <div className="mt-4 space-y-4">
+                <div className="p-2 rounded-md border">
+                  <div className="text-xs text-gray-500">Permit Requester</div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      placeholder="Search user..."
+                      className="w-full rounded border px-3 py-2 text-sm"
+                      value={form.permitDetails?.permitRequester || ""}
+                      onChange={(e) =>
+                        update("permitDetails.permitRequester", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-md border">
+                  <div className="text-xs text-gray-500">Permit Approver 1</div>
+                  <input
+                    aria-label="Permit Approver 1"
+                    value={form.permitDetails?.permitApprover1 || ""}
+                    onChange={(e) =>
+                      update("permitDetails.permitApprover1", e.target.value)
+                    }
+                    className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                    placeholder="Approver name or role"
+                  />
+                </div>
+
+                <div className="p-2 rounded-md border">
+                  <div className="text-xs text-gray-500">Permit Approver 2</div>
+                  <input
+                    aria-label="Permit Approver 2"
+                    value={form.permitDetails?.permitApprover2 || ""}
+                    onChange={(e) =>
+                      update("permitDetails.permitApprover2", e.target.value)
+                    }
+                    className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                    placeholder="Approver name or role"
+                  />
+                </div>
+
+                <div className="p-2 rounded-md border">
+                  <div className="text-xs text-gray-500">Safety Manager</div>
+                  <input
+                    aria-label="Safety Manager"
+                    value={form.permitDetails?.safetyManager || ""}
+                    onChange={(e) =>
+                      update("permitDetails.safetyManager", e.target.value)
+                    }
+                    className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                    placeholder="Safety Manager name/department"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500">
+                      Permit Issue Date
+                    </label>
+                    <input
+                      type="date"
+                      value={form.permitDetails?.permitIssueDate || ""}
+                      onChange={(e) =>
+                        update("permitDetails.permitIssueDate", e.target.value)
+                      }
+                      className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">
+                      Expected Return Date
+                    </label>
+                    <input
+                      type="date"
+                      value={form.permitDetails?.expectedReturnDate || ""}
+                      onChange={(e) =>
+                        update("permitDetails.expectedReturnDate", e.target.value)
+                      }
+                      className="w-full mt-1 rounded border px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Read-only comments sections - MOVED TO TOP */}
+                {(() => {
+                  try {
+                    const raw =
+                      typeof window !== "undefined"
+                        ? localStorage.getItem("dps_approver_comments")
+                        : null;
+                    const data = raw ? JSON.parse(raw) : null;
+                    const hasAny = !!(
+                      data &&
+                      (data.approverRequireUrgent ||
+                        data.approverSafetyManagerApproval ||
+                        data.approverPlannedShutdown ||
+                        (data.approverCustomComments || []).length > 0)
+                    );
+                    return (
+                      <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                        <div className="text-md font-medium">
+                          Comments from Approver:
+                        </div>
+                        <div className="mt-2 space-y-1 text-sm">
+                          {hasAny ? (
+                            <>
+                              {data?.approverRequireUrgent && (
+                                <div>Complete your work in timely manner</div>
+                              )}
+                              {data?.approverSafetyManagerApproval && (
+                                <div>Involve safety person while working</div>
+                              )}
+                              {(data?.approverPlannedShutdown ||
+                                data?.approverPlannedShutdownDate) && (
+                                <div>
+                                  Ensure shutdown on this date is confirmed
+                                  before start of work:{" "}
+                                  {data?.approverPlannedShutdownDate || ""}
+                                </div>
+                              )}
+                              {(data?.approverCustomComments || []).map(
+                                (it: any, i: number) => (
+                                  <div key={i}>
+                                    - {typeof it === "string" ? it : it.text}
+                                  </div>
+                                ),
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-gray-500">
+                              No comments from approver yet
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  } catch (e) {
+                    return (
+                      <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                        <div className="text-md font-medium">
+                          Comments from Approver:
+                        </div>
+                        <div className="mt-2 space-y-1 text-sm text-gray-500">
+                          No comments from approver yet
+                        </div>
+                      </div>
+                    );
+                  }
+                })()}
+
+                {/* Safety Officer comments (read-only) */}
+                {(() => {
+                  try {
+                    const raw =
+                      typeof window !== "undefined"
+                        ? localStorage.getItem("dps_SafetyOfficer_comments")
+                        : null;
+                    const sData = raw ? JSON.parse(raw) : null;
+                    const sHasAny = !!(
+                      sData &&
+                      (sData.SafetyOfficerRequireUrgent ||
+                        sData.SafetyOfficerSafetyManagerApproval ||
+                        sData.SafetyOfficerPlannedShutdown ||
+                        (sData.SafetyOfficerCustomComments || []).length > 0)
+                    );
+                    return (
+                      <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                        <div className="text-md font-medium">
+                          Comments from Safety Officer:
+                        </div>
+                        <div className="mt-2 space-y-1 text-sm">
+                          {sHasAny ? (
+                            <>
+                              {sData?.SafetyOfficerRequireUrgent && (
+                                <div>Complete your work in timely manner</div>
+                              )}
+                              {sData?.SafetyOfficerSafetyManagerApproval && (
+                                <div>Involve safety person while working</div>
+                              )}
+                              {(sData?.SafetyOfficerPlannedShutdown ||
+                                sData?.SafetyOfficerPlannedShutdownDate) && (
+                                <div>
+                                  Ensure shutdown on this date is confirmed
+                                  before start of work:{" "}
+                                  {sData?.SafetyOfficerPlannedShutdownDate ||
+                                    ""}
+                                </div>
+                              )}
+                              {(sData?.SafetyOfficerCustomComments || []).map(
+                                (it: any, i: number) => (
+                                  <div key={i}>
+                                    - {typeof it === "string" ? it : it.text}
+                                  </div>
+                                ),
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-gray-500">
+                              No comments from safety officer yet
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  } catch (e) {
+                    return (
+                      <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                        <div className="text-md font-medium">
+                          Comments from Safety Officer:
+                        </div>
+                        <div className="mt-2 space-y-1 text-sm text-gray-500">
+                          No comments from safety officer yet
+                        </div>
+                      </div>
+                    );
+                  }
+                })()}
+
+                {/* Editable comments sections - MOVED TO BOTTOM */}
+                <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                  <div className="text-md font-medium">
+                    Comments for Approver:
+                  </div>
+                  <label className="flex items-center gap-2 mt-2">
+                    <input
+                      type="checkbox"
+                      checked={!!form.permitDetails?.requesterRequireUrgent}
+                      onChange={(e) =>
+                        update("permitDetails.requesterRequireUrgent", e.target.checked)
+                      }
+                    />
+                    Require on urgent basis
+                  </label>
+                  <label className="flex items-center gap-2 mt-2">
+                    <input
+                      type="checkbox"
+                      checked={!!form.permitDetails?.requesterSafetyManagerApproval}
+                      onChange={(e) =>
+                        update("permitDetails.requesterSafetyManagerApproval", e.target.checked)
+                      }
+                    />
+                    Safety Manager approval required
+                  </label>
+                  <div className="mt-2 text-md flex items-center gap-2">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!form.permitDetails?.requesterPlannedShutdown}
+                        onChange={(e) =>
+                          update("permitDetails.requesterPlannedShutdown", e.target.checked)
+                        }
+                      />
+                      <span>Planned shutdown on:</span>
+                    </label>
+                    <input
+                      type="date"
+                      className="rounded border px-2 py-1 text-sm"
+                      value={form.permitDetails?.requesterPlannedShutdownDate || ""}
+                      onChange={(e) =>
+                        update("permitDetails.requesterPlannedShutdownDate", e.target.value)
+                      }
+                    />
+                  </div>
+
+                  {/* Custom comments section */}
+                  <div className="mt-3">
+                    <div className="mt-2 space-y-1">
+                      {(form.permitDetails?.requesterCustomComments || []).map(
+                        (item: any, idx: number) => {
+                          const text =
+                            typeof item === "string" ? item : item.text;
+                          const checked =
+                            typeof item === "string" ? false : !!item.checked;
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between gap-2 w-full"
+                            >
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    const prev =
+                                      form.permitDetails?.requesterCustomComments || [];
+                                    const next = prev.map(
+                                      (it: any, i: number) => {
+                                        if (i !== idx) return it;
+                                        if (typeof it === "string")
+                                          return {
+                                            text: it,
+                                            checked: e.target.checked,
+                                          };
+                                        return {
+                                          ...it,
+                                          checked: e.target.checked,
+                                        };
+                                      },
+                                    );
+                                    update("permitDetails.requesterCustomComments", next);
+                                  }}
+                                />
+                                <span className="text-sm">{text}</span>
+                              </div>
+                              <div>
+                                <button
+                                  type="button"
+                                  aria-label={`Delete comment ${idx + 1}`}
+                                  onClick={() => {
+                                    const prev =
+                                      form.permitDetails?.requesterCustomComments || [];
+                                    const next = prev.filter(
+                                      (_: any, i: number) => i !== idx,
+                                    );
+                                    update("permitDetails.requesterCustomComments", next);
+                                  }}
+                                  className="text-xs text-red-600 hover:underline px-2 py-1"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        },
+                      )}
+                    </div>
+
+                    <p className="text-xs font-medium mt-2">Add comment</p>
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        placeholder="Add comment"
+                        className="flex-1 rounded border px-3 py-2 text-sm"
+                        value={newRequesterComment}
+                        onChange={(e) => setNewRequesterComment(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const v = newRequesterComment.trim();
+                          if (!v) return;
+                          const prev = form.permitDetails?.requesterCustomComments || [];
+                          update("permitDetails.requesterCustomComments", [
+                            ...prev,
+                            { text: v, checked: false },
+                          ]);
+                          setNewRequesterComment("");
+                        }}
+                        className="px-3 py-1 rounded bg-white border text-sm"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comments for Safety Officer */}
+                <div className="mt-4 bg-yellow-50 p-3 rounded-md">
+                  <div className="text-md font-medium">
+                    Comments for Safety Officer:
+                  </div>
+                  <label className="flex items-center gap-2 mt-2">
+                    <input
+                      type="checkbox"
+                      checked={!!form.permitDetails?.requesterSafetyRequireUrgent}
+                      onChange={(e) =>
+                        update("permitDetails.requesterSafetyRequireUrgent", e.target.checked)
+                      }
+                    />
+                    Require on urgent basis
+                  </label>
+                  <label className="flex items-center gap-2 mt-2">
+                    <input
+                      type="checkbox"
+                      checked={!!form.permitDetails?.requesterSafetySafetyManagerApproval}
+                      onChange={(e) =>
+                        update("permitDetails.requesterSafetySafetyManagerApproval", e.target.checked)
+                      }
+                    />
+                    Approver approval required
+                  </label>
+                  <div className="mt-2 text-md flex items-center gap-2">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!form.permitDetails?.requesterSafetyPlannedShutdown}
+                        onChange={(e) =>
+                          update("permitDetails.requesterSafetyPlannedShutdown", e.target.checked)
+                        }
+                      />
+                      <span>Planned shutdown on:</span>
+                    </label>
+                    <input
+                      type="date"
+                      className="rounded border px-2 py-1 text-sm"
+                      value={form.permitDetails?.requesterSafetyPlannedShutdownDate || ""}
+                      onChange={(e) =>
+                        update("permitDetails.requesterSafetyPlannedShutdownDate", e.target.value)
+                      }
+                    />
+                  </div>
+
+                  {/* Safety custom comments */}
+                  <div className="mt-3">
+                    <div className="mt-2 space-y-1">
+                      {(form.permitDetails?.requesterSafetyCustomComments || []).map(
+                        (item: any, idx: number) => {
+                          const text =
+                            typeof item === "string" ? item : item.text;
+                          const checked =
+                            typeof item === "string" ? false : !!item.checked;
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between gap-2 w-full"
+                            >
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    const prev =
+                                      form.permitDetails?.requesterSafetyCustomComments || [];
+                                    const next = prev.map(
+                                      (it: any, i: number) => {
+                                        if (i !== idx) return it;
+                                        if (typeof it === "string")
+                                          return {
+                                            text: it,
+                                            checked: e.target.checked,
+                                          };
+                                        return {
+                                          ...it,
+                                          checked: e.target.checked,
+                                        };
+                                      },
+                                    );
+                                    update("permitDetails.requesterSafetyCustomComments", next);
+                                  }}
+                                />
+                                <span className="text-sm">{text}</span>
+                              </div>
+                              <div>
+                                <button
+                                  type="button"
+                                  aria-label={`Delete comment ${idx + 1}`}
+                                  onClick={() => {
+                                    const prev =
+                                      form.permitDetails?.requesterSafetyCustomComments || [];
+                                    const next = prev.filter(
+                                      (_: any, i: number) => i !== idx,
+                                    );
+                                    update("permitDetails.requesterSafetyCustomComments", next);
+                                  }}
+                                  className="text-xs text-red-600 hover:underline px-2 py-1"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        },
+                      )}
+                    </div>
+
+                    <p className="text-xs font-medium mt-2">Add comment</p>
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        placeholder="Add comment"
+                        className="flex-1 rounded border px-3 py-2 text-sm"
+                        value={newRequesterSafetyComment}
+                        onChange={(e) =>
+                          setNewRequesterSafetyComment(e.target.value)
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const v = newRequesterSafetyComment.trim();
+                          if (!v) return;
+                          const prev = form.permitDetails?.requesterSafetyCustomComments || [];
+                          update("permitDetails.requesterSafetyCustomComments", [
+                            ...prev,
+                            { text: v, checked: false },
+                          ]);
+                          setNewRequesterSafetyComment("");
+                        }}
+                        className="px-3 py-1 rounded bg-white border text-sm"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </StepSection>
+      )}
+
       <StepActions
         onBack={back}
         onSave={() => localStorage.setItem(storageKey, JSON.stringify(form))}
         onNext={() => (current === steps.length - 1 ? null : next())}
         nextLabel={current === steps.length - 1 ? "Submit" : "Next Step"}
-        disableNext={false}
+        disableNext={!canNext()}
         isFirst={current === 0}
         isLast={current === steps.length - 1}
         onPreview={() => setShowPreview(true)}
@@ -916,7 +1569,7 @@ export default function GasPermit() {
             </div>
           </div>
         </div>
-      )}
+      )}  
     </div>
   );
 }
